@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  ocr_service:
+    build: ./ocr_service
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./documents:/documents
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+
+  api_service:
+    build: ./api_service
+    depends_on:
+      - elasticsearch
+    ports:
+      - "8000:8000"
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+
+volumes:
+  esdata:
