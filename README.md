@@ -537,4 +537,4 @@ This system is designed for educational and laboratory purposes. It is not recom
 
 ## License
 
-MIT License - See LICENSE file for details.
+GNU General Public License v3.0.
