@@ -1,8 +1,11 @@
 # JetBrains IDEs
 .idea/
 
-# Carpeta de documentos (no subir PDFs privados)
+# Ignorar TODO dentro de documents...
 documents/*
+
+# ...PERO permitir este archivo
+!documents/README.txt
 
 # Python
 __pycache__/
