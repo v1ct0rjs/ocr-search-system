@@ -28,5 +28,21 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
 
+  web:
+    image: nginx:alpine
+    container_name: ocr-search-web
+    ports:
+      - "8080:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+
+  elasticvue:
+    image: cars10/elasticvue
+    container_name: elasticvue
+    ports:
+      - "8081:8080"
+    depends_on:
+      - elasticsearch
+
 volumes:
   esdata:

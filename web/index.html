@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Buscador OCR</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>🔎 Buscador Inteligente de Documentos</h1>
+  <p>Encuentra texto dentro de tus PDFs indexados por OCR</p>
+</header>
+
+<div class="search-container">
+  <div class="search-box">
+    <input type="text" id="q" placeholder="Escribe aquí lo que quieres buscar...">
+    <button onclick="buscar()">Buscar</button>
+  </div>
+</div>
+
+<div id="results"></div>
+
+<footer>
+  Sistema OCR + Elasticsearch + FastAPI
+</footer>
+
+<script>
+async function buscar() {
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+
+  const res = await fetch(`http://localhost:8000/search?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+
+  const container = document.getElementById("results");
+  container.innerHTML = "";
+
+  if (data.results.length === 0) {
+    container.innerHTML = "<p class='no-results'>No se encontraron resultados</p>";
+    return;
+  }
+
+  data.results.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "result";
+    div.innerHTML = `
+      <div class="filename">${r.filename}</div>
+      <div class="score">Relevancia: ${r.score.toFixed(2)}</div>
+      <div class="snippet">${r.snippet}...</div>
+    `;
+    container.appendChild(div);
+  });
+}
+</script>
+
+</body>
+</html>
