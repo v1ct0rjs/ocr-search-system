@@ -1,49 +1,43 @@
 import os
 import time
+import hashlib
 import numpy as np
-from pathlib import Path
-
-from elasticsearch import Elasticsearch
 from pdf2image import convert_from_path
 from paddleocr import PaddleOCR
+from elasticsearch import Elasticsearch
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-SUPPORTED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
-DOCUMENTS_DIR = Path("/documents")
+DOCS_PATH = "/documents"
 INDEX_NAME = "documents"
-ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
+
+es = Elasticsearch("http://elasticsearch:9200")
+ocr = PaddleOCR(lang="en", show_log=False)
+
+processed_files = set()
 
 
-def wait_for_elasticsearch(client: Elasticsearch, retries: int = 30, delay: int = 2) -> None:
-    for _ in range(retries):
-        try:
-            if client.ping():
-                return
-        except Exception:
-            pass
-        time.sleep(delay)
-    raise RuntimeError("Elasticsearch is not available")
+def file_hash(path):
+    hasher = hashlib.md5()
+    with open(path, "rb") as f:
+        hasher.update(f.read())
+    return hasher.hexdigest()
 
 
-def ensure_index(client: Elasticsearch) -> None:
-    if client.indices.exists(index=INDEX_NAME):
-        return
-    client.indices.create(
-        index=INDEX_NAME,
-        mappings={
-            "properties": {
-                "filename": {"type": "keyword"},
-                "content": {"type": "text"},
-            }
-        },
-    )
+def index_document(filename, text):
+    doc = {
+        "filename": filename,
+        "content": text
+    }
+    # Usar filename como ID => upsert/overwrite (evita duplicados)
+    es.index(index=INDEX_NAME, id=filename, document=doc)
+    print(f"Indexado/actualizado: {filename}")
 
 
-def extract_text_from_images(ocr, images):
+def extract_text_from_images(images):
     text = ""
     for image in images:
-        # Convertir PIL → numpy array (formato que Paddle entiende)
         image_np = np.array(image)
-
         result = ocr.ocr(image_np, cls=True)
         if result and result[0]:
             for line in result[0]:
@@ -51,12 +45,12 @@ def extract_text_from_images(ocr, images):
     return text
 
 
-def process_pdf(ocr: PaddleOCR, file_path: Path) -> str:
-    images = convert_from_path(file_path)
-    return extract_text_from_images(ocr, images)
+def process_pdf(path):
+    images = convert_from_path(path)
+    return extract_text_from_images(images)
 
 
-def process_image(ocr, path):
+def process_image(path):
     text = ""
     result = ocr.ocr(path, cls=True)
     if result and result[0]:
@@ -65,32 +59,78 @@ def process_image(ocr, path):
     return text
 
 
-def index_document(client: Elasticsearch, filename: str, content: str) -> None:
-    client.index(
-        index=INDEX_NAME,
-        id=filename,
-        document={"filename": filename, "content": content},
-    )
+def process_file(path):
+    if not os.path.isfile(path):
+        return
 
+    ext = path.lower().split(".")[-1]
+    file_id = file_hash(path)
 
-def main() -> None:
-    client = Elasticsearch(ELASTICSEARCH_HOST)
-    wait_for_elasticsearch(client)
-    ensure_index(client)
+    if file_id in processed_files:
+        return
 
-    ocr = PaddleOCR(use_angle_cls=True, lang="en")
+    print(f"Procesando: {os.path.basename(path)}")
 
-    for file_path in DOCUMENTS_DIR.iterdir():
-        if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            continue
-
-        if file_path.suffix.lower() == ".pdf":
-            content = process_pdf(ocr, file_path)
+    try:
+        if ext == "pdf":
+            text = process_pdf(path)
+        elif ext in ["jpg", "jpeg", "png"]:
+            print(f"Imagen detectada: {os.path.basename(path)}")
+            text = process_image(path)
         else:
-            content = process_image(ocr, file_path)
+            return
 
-        if content.strip():
-            index_document(client, file_path.name, content)
+        index_document(os.path.basename(path), text)
+        processed_files.add(file_id)
+
+    except Exception as e:
+        print(f"Error procesando {path}: {e}")
+
+
+class NewFileHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            return
+
+        path = event.src_path
+        ext = path.lower().split(".")[-1]
+
+        # Solo procesar tipos soportados
+        if ext not in ["pdf", "jpg", "jpeg", "png"]:
+            return
+
+        print(f"Nuevo archivo detectado: {os.path.basename(path)}")
+        time.sleep(3)  # esperar a que termine de copiarse
+        process_file(path)
+
+
+def initial_scan():
+    print("Escaneando documentos existentes...")
+    for file in os.listdir(DOCS_PATH):
+        process_file(os.path.join(DOCS_PATH, file))
+
+
+def main():
+    if not es.indices.exists(index=INDEX_NAME):
+        es.indices.create(index=INDEX_NAME)
+
+    initial_scan()
+
+    print("Vigilando carpeta documents para nuevos archivos...")
+    event_handler = NewFileHandler()
+    observer = Observer()
+    observer.schedule(event_handler, DOCS_PATH, recursive=False)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(10)
+            # 🔁 Rescan de seguridad por si watchdog falla
+            initial_scan()
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
 
 
 if __name__ == "__main__":
