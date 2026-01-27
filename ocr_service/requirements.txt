@@ -1,0 +1,4 @@
+paddleocr==2.7.0.3
+paddlepaddle==2.6.1
+pdf2image==1.17.0
+elasticsearch==8.11.1
