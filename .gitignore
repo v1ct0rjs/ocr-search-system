@@ -1,0 +1,21 @@
+# JetBrains IDEs
+.idea/
+
+# Carpeta de documentos (no subir PDFs privados)
+documents/*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales
+venv/
+.env
+
+# Logs
+*.log
+
+# Mac
+.DS_Store

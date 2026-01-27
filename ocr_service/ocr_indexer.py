@@ -1,5 +1,6 @@
 import os
 import time
+import numpy as np
 from pathlib import Path
 
 from elasticsearch import Elasticsearch
@@ -37,14 +38,17 @@ def ensure_index(client: Elasticsearch) -> None:
     )
 
 
-def extract_text_from_images(ocr: PaddleOCR, images) -> str:
-    text_chunks = []
+def extract_text_from_images(ocr, images):
+    text = ""
     for image in images:
-        result = ocr.ocr(image, cls=True)
-        for line in result:
-            if len(line) >= 2:
-                text_chunks.append(line[1][0])
-    return "\n".join(text_chunks)
+        # Convertir PIL → numpy array (formato que Paddle entiende)
+        image_np = np.array(image)
+
+        result = ocr.ocr(image_np, cls=True)
+        if result and result[0]:
+            for line in result[0]:
+                text += line[1][0] + " "
+    return text
 
 
 def process_pdf(ocr: PaddleOCR, file_path: Path) -> str:
@@ -52,13 +56,13 @@ def process_pdf(ocr: PaddleOCR, file_path: Path) -> str:
     return extract_text_from_images(ocr, images)
 
 
-def process_image(ocr: PaddleOCR, file_path: Path) -> str:
-    result = ocr.ocr(str(file_path), cls=True)
-    text_chunks = []
-    for line in result:
-        if len(line) >= 2:
-            text_chunks.append(line[1][0])
-    return "\n".join(text_chunks)
+def process_image(ocr, path):
+    text = ""
+    result = ocr.ocr(path, cls=True)
+    if result and result[0]:
+        for line in result[0]:
+            text += line[1][0] + " "
+    return text
 
 
 def index_document(client: Elasticsearch, filename: str, content: str) -> None:
