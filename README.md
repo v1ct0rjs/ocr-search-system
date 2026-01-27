@@ -15,29 +15,37 @@ The system automates the processing of scanned documents:
 3. Applies OCR with PaddleOCR
 4. Extracts detected text
 5. Indexes content in Elasticsearch
-6. Enables searching via REST API
+6. Enables searching via REST API and Web Interface
+
+The OCR service continuously monitors the `documents/` folder using watchdog and automatically processes new files.
 
 ---
 
 ## Architecture
 
 ```
-documents/ → OCR Service → Elasticsearch → API REST → User
+documents/ → OCR Service → Elasticsearch → API REST → Web Interface
+                                        ↘ Elasticvue (Admin)
 ```
 
-| Service         | Function                                               |
-|-----------------|--------------------------------------------------------|
-| OCR Service     | Processes documents and extracts text with OCR        |
-| Elasticsearch   | Stores and indexes document content                    |
-| API Service     | Provides an endpoint for full-text searches            |
+| Service         | Port  | Function                                               |
+|-----------------|-------|--------------------------------------------------------|
+| OCR Service     | -     | Processes documents and extracts text with OCR         |
+| Elasticsearch   | 9200  | Stores and indexes document content                    |
+| API Service     | 8000  | Provides an endpoint for full-text searches            |
+| Web Interface   | 8080  | User-friendly search interface                         |
+| Elasticvue      | 8081  | Elasticsearch admin interface                          |
 
 ---
 
 ## Technologies Used
 
 - PaddleOCR (Deep Learning-based OCR)
-- Elasticsearch 8
+- Elasticsearch 8.11.3
 - FastAPI
+- Nginx (Web server)
+- Elasticvue (Elasticsearch GUI)
+- Watchdog (File system monitoring)
 - Docker and Docker Compose
 - Python 3.10
 
@@ -58,7 +66,7 @@ Compatible with:
 
 ## Getting Started
 
-### 1. Start the base services
+### 1. Start all services
 
 ```bash
 docker compose up -d
@@ -68,6 +76,9 @@ This will start:
 
 - Elasticsearch at [http://localhost:9200](http://localhost:9200)
 - Search API at [http://localhost:8000](http://localhost:8000)
+- Web Interface at [http://localhost:8080](http://localhost:8080)
+- Elasticvue at [http://localhost:8081](http://localhost:8081)
+- OCR Service (monitors documents folder continuously)
 
 ---
 
@@ -85,24 +96,17 @@ Supported formats:
 - JPG / JPEG
 - PNG
 
----
-
-### 3. Run the OCR and indexing process
-
-```bash
-docker compose run --rm ocr_service
-```
-
-The system will download OCR models the first time and show messages like:
-
-```
-OCR PDF: contract.pdf
-Indexed: contract.pdf
-```
+The OCR service will automatically detect and process new files.
 
 ---
 
-### 4. Perform searches
+### 3. Perform searches
+
+#### Via Web Interface
+
+Open [http://localhost:8080](http://localhost:8080) in your browser and use the search form.
+
+#### Via API
 
 Use the browser or a tool like curl:
 
@@ -113,14 +117,12 @@ http://localhost:8000/search?q=contract
 Example response:
 
 ```json
-{
-  "results": [
-    {
-      "filename": "contract.pdf",
-      "score": 2.31
-    }
-  ]
-}
+[
+  {
+    "filename": "contract.pdf",
+    "score": 2.31
+  }
+]
 ```
 
 ---
@@ -141,68 +143,31 @@ or in the browser:
 http://localhost:9200/_cat/indices
 ```
 
-You will see a result like:
-
-```
-health status index                uuid                   pri rep docs.count docs.deleted store.size pri.store.size
-yellow open   documents           abc123def456ghi789jkl   1   1        150           0      5.2mb          5.2mb
-```
-
 ---
 
-### 2. View all indexed documents (with metadata)
+### 2. View all indexed documents
 
 ```bash
 curl http://localhost:9200/documents/_search?size=1000
-```
-
-or in the browser:
-
-```
-http://localhost:9200/documents/_search?size=1000
 ```
 
 Example response:
 
 ```json
 {
-  "took": 5,
-  "timed_out": false,
-  "_shards": {
-    "total": 1,
-    "successful": 1,
-    "skipped": 0,
-    "failed": 0
-  },
   "hits": {
     "total": {
       "value": 3,
       "relation": "eq"
     },
-    "max_score": 1,
     "hits": [
       {
         "_index": "documents",
-        "_type": "_doc",
-        "_id": "1",
+        "_id": "contract.pdf",
         "_score": 1,
         "_source": {
           "filename": "contract.pdf",
-          "content": "CONTRACT OF SERVICES... [full text extracted by OCR]",
-          "indexed_at": "2024-01-15T10:30:00",
-          "pages": 5
-        }
-      },
-      {
-        "_index": "documents",
-        "_type": "_doc",
-        "_id": "2",
-        "_score": 1,
-        "_source": {
-          "filename": "invoice_2024.jpg",
-          "content": "INVOICE NUMBER 001... [full text extracted by OCR]",
-          "indexed_at": "2024-01-15T10:31:00",
-          "pages": 1
+          "content": "CONTRACT OF SERVICES... [full text extracted by OCR]"
         }
       }
     ]
@@ -260,12 +225,6 @@ Example response:
         },
         "content": {
           "type": "text"
-        },
-        "indexed_at": {
-          "type": "date"
-        },
-        "pages": {
-          "type": "integer"
         }
       }
     }
@@ -281,20 +240,6 @@ Example response:
 curl http://localhost:9200/documents/_count
 ```
 
-Example response:
-
-```json
-{
-  "count": 150,
-  "_shards": {
-    "total": 1,
-    "successful": 1,
-    "skipped": 0,
-    "failed": 0
-  }
-}
-```
-
 ---
 
 ### 7. View index statistics
@@ -305,58 +250,21 @@ curl http://localhost:9200/documents/_stats
 
 ---
 
-## Recommended tools for viewing content
+## Elasticvue - Visual Interface
 
-### With Curl (command line)
-
-```bash
-# View all documents in pretty format
-curl http://localhost:9200/documents/_search?size=1000 | jq .
-
-# Search for a specific document
-curl "http://localhost:9200/documents/_search?q=filename:contract.pdf" | jq .
-
-# View only extracted content
-curl http://localhost:9200/documents/_search?size=1000 | jq '.hits.hits[].\_source | {filename, content}'
-```
-
-### With Kibana (visual interface)
-
-If you want a more user-friendly graphical interface, add Kibana to your `docker-compose.yml`:
-
-```yaml
-kibana:
-  image: docker.elastic.co/kibana/kibana:8.0.0
-  ports:
-    - "5601:5601"
-  environment:
-    ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-  depends_on:
-    - elasticsearch
-```
-
-Then access:
+For a more user-friendly graphical interface to manage Elasticsearch, access Elasticvue at:
 
 ```
-http://localhost:5601
+http://localhost:8081
 ```
 
-From Kibana you can visualize, filter and search documents graphically.
+Connect to `http://elasticsearch:9200` or `http://localhost:9200` to visualize, filter and search documents graphically.
 
 ---
 
 ## Management Script (manage.sh)
 
 To simplify system administration, the `manage.sh` script is included, which automates the most common tasks.
-
-### What is manage.sh?
-
-It is a bash script that provides a command-line interface to manage the entire OCR system lifecycle:
-
-- Start and stop services
-- View logs
-- Reset indexes
-- Perform search tests
 
 ### Installation
 
@@ -383,22 +291,10 @@ Without arguments, it displays the help menu.
 #### `./manage.sh up`
 **Start the entire system**
 
-Runs `docker compose up -d` and starts:
-- Elasticsearch
-- API Service
-- OCR Service (in background)
+Runs `docker compose up -d` and starts all services.
 
 ```bash
 ./manage.sh up
-```
-
-Result:
-```
-==============================
-  OCR SEARCH SYSTEM
-==============================
-Starting services...
-System started
 ```
 
 ---
@@ -412,15 +308,6 @@ Completely stops all containers:
 ./manage.sh down
 ```
 
-Result:
-```
-==============================
-  OCR SEARCH SYSTEM
-==============================
-Stopping services...
-System stopped
-```
-
 ---
 
 #### `./manage.sh restart`
@@ -432,8 +319,6 @@ Useful if something is not working correctly:
 ./manage.sh restart
 ```
 
-Stops and restarts all containers without losing data.
-
 ---
 
 #### `./manage.sh rebuild`
@@ -443,12 +328,6 @@ Rebuilds all Docker images from scratch:
 
 ```bash
 ./manage.sh rebuild
-```
-
-Result:
-```
-Complete rebuild (no cache)...
-Rebuild finished
 ```
 
 Useful if:
@@ -467,19 +346,9 @@ Shows a table with the current status of all containers:
 ./manage.sh status
 ```
 
-Result:
-```
-CONTAINER ID   IMAGE                    STATUS              PORTS
-a1b2c3d4e5f6   ocr-service              Up 2 minutes        
-g7h8i9j0k1l2   api-service              Up 2 minutes        0.0.0.0:8000->8000/tcp
-m3n4o5p6q7r8   elasticsearch            Up 3 minutes        0.0.0.0:9200->9200/tcp
-```
-
 ---
 
 ### View logs
-
-Logs show you what is happening in each service in real time.
 
 #### `./manage.sh logs-api`
 **API service logs**
@@ -488,13 +357,6 @@ Shows FastAPI logs:
 
 ```bash
 ./manage.sh logs-api
-```
-
-You will see messages like:
-```
-api_service_1  | INFO:     Started server process [1]
-api_service_1  | INFO:     Uvicorn running on http://0.0.0.0:8000
-api_service_1  | GET /search?q=contract HTTP/1.1
 ```
 
 Press `Ctrl+C` to exit.
@@ -510,13 +372,6 @@ Shows document processing:
 ./manage.sh logs-ocr
 ```
 
-You will see messages like:
-```
-ocr_service_1  | OCR PDF: contract.pdf
-ocr_service_1  | Text extracted: 12000 characters
-ocr_service_1  | Indexed: contract.pdf (5 pages)
-```
-
 Very useful for debugging OCR problems.
 
 ---
@@ -530,12 +385,6 @@ Shows the status of the search engine:
 ./manage.sh logs-es
 ```
 
-You will see messages like:
-```
-elasticsearch_1 | [2024-01-15T10:30:00,123][INFO ][o.e.n.Node] started
-elasticsearch_1 | [2024-01-15T10:30:01,456][INFO ][o.e.c.m.MetadataCreateIndexService] created index
-```
-
 ---
 
 ### Index operations
@@ -543,28 +392,13 @@ elasticsearch_1 | [2024-01-15T10:30:01,456][INFO ][o.e.c.m.MetadataCreateIndexSe
 #### `./manage.sh reset-index`
 **Delete and reindex all documents**
 
-Cleans the Elasticsearch index and reprocesses all documents:
+Cleans the Elasticsearch index and restarts OCR to reprocess all documents:
 
 ```bash
 ./manage.sh reset-index
 ```
 
-Result:
-```
-==============================
-  OCR SEARCH SYSTEM
-==============================
-Deleting Elasticsearch index...
-Restarting OCR to reindex everything...
-Reindexing in progress (check logs_ocr)
-```
-
-Warning: This deletes all indexed data. Use it only if you need to clean everything.
-
-Use cases:
-- You change the index structure
-- You need to reprocess documents
-- You want to start from scratch
+Warning: This deletes all indexed data.
 
 ---
 
@@ -573,32 +407,10 @@ Use cases:
 #### `./manage.sh search`
 **Test searches from terminal**
 
-Allows performing interactive searches without leaving the terminal:
+Allows performing interactive searches:
 
 ```bash
 ./manage.sh search
-```
-
-Result:
-```
-==============================
-  OCR SEARCH SYSTEM
-==============================
-Search test:
-Text to search: contract
-```
-
-Type what you want to search for and press Enter:
-
-```json
-{
-  "results": [
-    {
-      "filename": "contract.pdf",
-      "score": 2.31
-    }
-  ]
-}
 ```
 
 ---
@@ -617,7 +429,7 @@ chmod +x manage.sh
 # Check status
 ./manage.sh status
 
-# View OCR logs to know when it finishes
+# View OCR logs to monitor processing
 ./manage.sh logs-ocr
 ```
 
@@ -625,11 +437,12 @@ chmod +x manage.sh
 
 ```bash
 # Copy documents to documents/ folder
+# The OCR service will automatically detect and process them
 
-# Process OCR (if the script is executable, otherwise use docker compose)
-./manage.sh logs-ocr  # check if OCR is running
+# Monitor OCR processing
+./manage.sh logs-ocr
 
-# Perform searches
+# Perform searches via web or terminal
 ./manage.sh search
 ```
 
@@ -660,74 +473,15 @@ chmod +x manage.sh
 
 ---
 
-## Technical Explanation of manage.sh
-
-### Script Structure
-
-- **`set -e`**: Stops the script if any command fails
-- **Global variables**: `PROJECT_NAME` and `INDEX_NAME` for configuration
-- **Functions**: Each command is a bash function
-- **Switch case**: Routes arguments to the correct functions
-
-### Main Functions
-
-| Function | Task | Technology |
-|----------|------|-----------|
-| `header()` | Prints formatted title | `echo` bash |
-| `up()` / `down()` | Container control | `docker compose` |
-| `logs_*()` | Real-time monitoring | `docker compose logs -f` |
-| `status()` | Inspect containers | `docker compose ps` |
-| `reset_index()` | Clean Elasticsearch | `curl DELETE` |
-| `search_test()` | Interactive search | `curl GET` + `read` bash |
-
-### Error Handling
-
-```bash
-curl -s -X DELETE "http://localhost:9200/$INDEX_NAME" || true
-```
-
-The `|| true` makes the script continue even if the index doesn't exist (avoids error on first run).
-
----
-
-## Normal Usage Flow
-
-Each time you add new documents to the `documents/` folder, run:
-
-```bash
-docker compose run --rm ocr_service
-```
-
-This will process the new files and add them to the search index.
-
----
-
-## Quick Start Script (Linux/macOS)
-
-You can use the `start.sh` script:
-
-```bash
-./start.sh
-```
-
-This script:
-
-1. Starts Elasticsearch and the API
-2. Waits for Elasticsearch to be available
-3. Runs the OCR service to index documents
-
----
-
 ## Usage on Windows
 
 With Docker Desktop installed, use PowerShell:
 
 ```powershell
 docker compose up -d
-docker compose run --rm ocr_service
 ```
 
-Optionally you can use the `start.ps1` script if you created it.
+Documents placed in the `documents/` folder will be automatically processed.
 
 ---
 
@@ -737,7 +491,6 @@ Optionally you can use the `start.ps1` script if you created it.
 ocr-search-system/
 │
 ├── docker-compose.yml
-├── start.sh
 ├── manage.sh
 ├── documents/
 │   └── README.txt
@@ -752,6 +505,10 @@ ocr-search-system/
 │   ├── requirements.txt
 │   └── main.py
 │
+├── web/
+│   ├── index.html
+│   └── styles.css
+│
 └── README.md
 ```
 
@@ -763,6 +520,8 @@ ocr-search-system/
 - Images generated from PDFs (PIL) are converted to NumPy arrays before sending them to the OCR engine.
 - Elasticsearch runs in single-node mode without security, designed for lab or development environment.
 - PaddleOCR models are automatically downloaded the first time OCR is executed.
+- The OCR service uses watchdog to monitor the documents folder and automatically processes new files.
+- Documents are indexed using their filename as the ID, preventing duplicates on reprocessing.
 
 ---
 
@@ -776,6 +535,6 @@ This system is designed for educational and laboratory purposes. It is not recom
 
 ---
 
-## Authorship
+## License
 
-Project aimed at integrating systems administration with intelligent document processing through OCR.
+MIT License - See LICENSE file for details.
