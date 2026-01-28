@@ -2,11 +2,19 @@ from elasticsearch import Elasticsearch
 from fastapi import FastAPI, Query
 from typing import List
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
 INDEX_NAME = "documents"
 
 app = FastAPI(title="OCR Document Search API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 client = Elasticsearch(ELASTICSEARCH_HOST)
 
 
