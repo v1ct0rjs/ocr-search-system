@@ -180,19 +180,14 @@ Example response:
 ### 3. View extracted content of a specific file
 
 ```bash
-curl http://localhost:9200/documents/_search?q=filename:contract.pdf
+curl http://localhost:9200/documents/_search?pretty
+
 ```
 
-or more detailed:
+or a file by its filename:
 
 ```bash
-curl -X POST http://localhost:9200/documents/_search -H "Content-Type: application/json" -d '{
-  "query": {
-    "match": {
-      "filename": "contract.pdf"
-    }
-  }
-}'
+curl http://localhost:9200/documents/_search?q=filename:contract.pdf
 ```
 
 ---

@@ -18,6 +18,7 @@ processed_files = set()
 
 
 def file_hash(path):
+    '''Genera un hash MD5 del archivo para evitar reprocesamiento.'''
     hasher = hashlib.md5()
     with open(path, "rb") as f:
         hasher.update(f.read())
@@ -25,6 +26,7 @@ def file_hash(path):
 
 
 def index_document(filename, text):
+    '''Indexa el documento en Elasticsearch.'''
     doc = {
         "filename": filename,
         "content": text
@@ -35,6 +37,7 @@ def index_document(filename, text):
 
 
 def extract_text_from_images(images):
+    '''Extrae texto de una lista de imágenes usando OCR.'''
     text = ""
     for image in images:
         image_np = np.array(image)
@@ -46,11 +49,13 @@ def extract_text_from_images(images):
 
 
 def process_pdf(path):
+    '''Convierte un PDF a imágenes y extrae texto usando OCR.'''
     images = convert_from_path(path)
     return extract_text_from_images(images)
 
 
 def process_image(path):
+    '''Extrae texto de una imagen usando OCR.'''
     text = ""
     result = ocr.ocr(path, cls=True)
     if result and result[0]:
@@ -60,6 +65,7 @@ def process_image(path):
 
 
 def process_file(path):
+    '''Procesa un archivo (PDF o imagen) y lo indexa.'''
     if not os.path.isfile(path):
         return
 
@@ -88,7 +94,11 @@ def process_file(path):
 
 
 class NewFileHandler(FileSystemEventHandler):
+    '''Manejador de eventos para nuevos archivos.
+    Creamos una clase que hereda de FileSystemEventHandler.'''
+
     def on_created(self, event):
+        '''Cuando se crea un nuevo archivo, procesarlo.'''
         if event.is_directory:
             return
 
@@ -105,6 +115,7 @@ class NewFileHandler(FileSystemEventHandler):
 
 
 def initial_scan():
+    '''Escanea la carpeta documents al inicio para procesar archivos existentes.'''
     print("Escaneando documentos existentes...")
     for file in os.listdir(DOCS_PATH):
         process_file(os.path.join(DOCS_PATH, file))
