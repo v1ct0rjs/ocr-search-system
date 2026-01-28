@@ -60,12 +60,12 @@ function status() {
 
 function reset_index() {
   header
-  echo "🗑 Borrando índice Elasticsearch..."
+  echo "orrando índice Elasticsearch..."
   curl -s -X DELETE "http://localhost:9200/$INDEX_NAME" || true
   echo ""
-  echo "📦 Reiniciando OCR para reindexar todo..."
+  echo "Reiniciando OCR para reindexar todo..."
   docker compose restart ocr_service
-  echo "✅ Reindexación en marcha (mira logs_ocr)"
+  echo "Reindexación en marcha (mira logs_ocr)"
 }
 
 function search_test() {
