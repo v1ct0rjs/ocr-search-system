@@ -136,7 +136,7 @@ def main():
     try:
         while True:
             time.sleep(10)
-            # 🔁 Rescan de seguridad por si watchdog falla
+            # Rescan de seguridad por si watchdog falla
             initial_scan()
     except KeyboardInterrupt:
         observer.stop()
