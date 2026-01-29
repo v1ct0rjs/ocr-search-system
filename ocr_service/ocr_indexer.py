@@ -4,7 +4,7 @@ import hashlib
 import logging
 import numpy as np
 
-# Desactivar optimizaciones problemáticas ANTES de importar PaddleOCR
+
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_eager_mode"] = "1"
 
@@ -14,7 +14,7 @@ from elasticsearch import Elasticsearch
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
-# Configurar logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s: %(message)s',
@@ -22,14 +22,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Suprimir warnings de PaddleOCR
+
 logging.getLogger("ppocr").setLevel(logging.ERROR)
 
 DOCS_PATH = "/documents"
 INDEX_NAME = "documents"
 SUPPORTED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 
-es = Elasticsearch("http://elasticsearch:9200")
+es = Elasticsearch("http://elasticsearch:9200") # Conexión a Elasticsearch
 
 # Inicializar OCR configuración
 ocr = PaddleOCR(
@@ -145,7 +145,8 @@ def process_file(path):
 
 
 class NewFileHandler(FileSystemEventHandler):
-    '''Manejador de eventos para nuevos archivos.'''
+    '''Manejador de eventos para nuevos archivos por watchdog. Usamos esta clase para detectar cambios en la carpet,
+    ya que FileSystemEventHandler puede perder eventos en sistemas de archivos y para el correcto funcionamiento.'''
 
     def _is_valid_file(self, path):
         '''Verifica si el archivo es de un tipo soportado.'''

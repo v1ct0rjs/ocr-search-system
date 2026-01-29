@@ -21,11 +21,11 @@ ENV PYTHONUNBUFFERED=1
 
 COPY requirements.txt .
 
-# Fijar numpy 1.x antes de instalar librerías de visión
+
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir "numpy<2.0"
 
-# Paddle CPU compatible (versión estable)
+# Paddle OCR compatible (versión estable)
 RUN pip install --no-cache-dir paddlepaddle==2.5.2 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 RUN pip install --no-cache-dir paddleocr==2.7.0.3
 

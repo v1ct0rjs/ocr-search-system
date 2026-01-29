@@ -1,7 +1,7 @@
+import os
 from elasticsearch import Elasticsearch, NotFoundError
 from fastapi import FastAPI, Query, HTTPException
 from typing import List
-import os
 from fastapi.middleware.cors import CORSMiddleware
 
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://elasticsearch:9200")
