@@ -12,7 +12,7 @@ DOCS_PATH = "/documents"
 INDEX_NAME = "documents"
 
 es = Elasticsearch("http://elasticsearch:9200")
-ocr = PaddleOCR(lang="en", show_log=False)
+ocr = PaddleOCR(lang="es", show_log=False)
 
 processed_files = set()
 
